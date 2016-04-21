@@ -34,9 +34,9 @@ def get_keyboard(default="", heading="", hidden=False):
 
 def index(page, name):
     html = SeasonvarWebOpener().get_html(page)
-    elem = re.findall('id": "(.*)", "serial": "(.*)" , "type": "html5", "secure": "(.*)"', html)[0]
-    id = elem[0]
-    secure = elem[2]
+    id = re.findall('var\s+id\s*=\s*\"(\d+)\"', html)[0]
+    serial_id = re.findall('var\s+serial_id\s*=\s*\"(\d+)\"', html)[0]
+    secure = re.findall('var\s+secureMark\s*=\s*\"(.*)\"', html)[0]
     print_playlist(id, secure, name)
 
 
@@ -147,11 +147,11 @@ def main():
 
     # first page
     if mode is None:
-        li = xbmcgui.ListItem("Search")
+        li = xbmcgui.ListItem("search")
         u = localpath + "?mode=3"
         xbmcplugin.addDirectoryItem(handle, u, li, True)
-        for serial in grabber.get_main_page_data():
-            add_dir(serial.get_url(), serial.get_name(), serial.get_thumb(), 1)
+        # for serial in grabber.get_main_page_data():
+        #     add_dir(serial.get_url(), serial.get_name(), serial.get_thumb(), 1)
 
     # page with links
     elif mode is 1:
