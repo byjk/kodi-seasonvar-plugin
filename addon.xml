@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.seasonvar.light" name="Seasonvar" version="0.2" provider-name="burgua">
+<addon id="plugin.video.seasonvar" name="Seasonvar" version="0.3" provider-name="burgua">
   <requires>
     <import addon="xbmc.python" version="2.20.0"/>
     <import addon="xbmc.gui" version="5.9.0"/>
@@ -15,8 +15,8 @@
     <platform>all</platform>
     <license></license>
     <forum></forum>
-    <website></website>
+    <website>https://github.com/byjk/plugin.video.seasonvar</website>
     <email></email>
-    <source></source>
+    <source>https://github.com/byjk/plugin.video.seasonvar</source>
   </extension>
 </addon>

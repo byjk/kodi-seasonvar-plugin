@@ -6,10 +6,17 @@ from seasonvar_grabber import *
 import urllib
 import sys
 import json
+import os
 
 import xbmcgui
 import xbmcplugin
+import xbmcaddon
 
+
+__addon__ = xbmcaddon.Addon()
+__profile__ = xbmc.translatePath( __addon__.getAddonInfo('profile') ).decode("utf-8")
+__last__ = os.path.join(__profile__,'last.log')
+__action__ = '-'
 
 def add_dir(url, name, iconImage, mode):
     u = (sys.argv[0] +
@@ -34,10 +41,18 @@ def get_keyboard(default="", heading="", hidden=False):
 
 def index(page, name):
     html = SeasonvarWebOpener().get_html(page)
-    id = re.findall('var\s+id\s*=\s*\"(\d+)\"', html)[0]
-    serial_id = re.findall('var\s+serial_id\s*=\s*\"(\d+)\"', html)[0]
-    secure = re.findall('var\s+secureMark\s*=\s*\"(.*)\"', html)[0]
-    print_playlist(id, secure, name)
+    m = re.findall('var\s+id\s*=\s*\"(\d+)\"', html)
+    if m:
+        id = m[0]
+        serial_id = re.findall('var\s+serial_id\s*=\s*\"(\d+)\"', html)[0]
+        secure = re.findall('var\s+secureMark\s*=\s*\"(.*)\"', html)[0]
+        print_playlist(id, secure, name)
+    else:
+        m = re.findall('php\?help_id=2', html)
+        if m:
+            xbmcgui.Dialog().ok('Ошибка','По просьбе правообладателя, сезон заблокирован для вашей страны. ')
+        else:
+            xbmcgui.Dialog().ok('Ошибка','Что-то пошло не так')
 
 
 def get_file_links(json_response):
@@ -67,17 +82,18 @@ def add_downLink(name, url, mode):
          "&mode=" + str(mode) +
          "&name=" + urllib.quote_plus(name))
     ok = True
-    liz = xbmcgui.ListItem(name, iconImage="icon.png")
+    liz = xbmcgui.ListItem(name, iconImage="icon.png",path=u)
     liz.setInfo(type="Video", infoLabels={"Title": name})
+    liz.setProperty('IsPlayable', 'True')
     ok = xbmcplugin.addDirectoryItem(handle=int(sys.argv[1]),
                                      url=u, listitem=liz, isFolder=False)
     return ok
 
 
-def play(url, name):
-    listitem = xbmcgui.ListItem(name)
-    listitem.setInfo('video', {'Title': name})
-    xbmc.Player().play(url, listitem)
+def play(handle, url, name):
+    play_item = xbmcgui.ListItem(label=name,path=url)
+    play_item.setInfo('video', {'Title': name})
+    xbmcplugin.setResolvedUrl(handle, True, listitem=play_item)
 
 
 def get_params():
@@ -98,34 +114,51 @@ def get_params():
     return param
 
 
-def search(localpath, handle):
-    vq = get_keyboard(heading="Enter the query")
-    vq = vq.encode('utf-8')
-    title = urllib.quote_plus(vq)
-    searchUrl = 'http://seasonvar.ru/autocomplete.php?query=' + title
-    show_search_list(localpath, handle, searchUrl)
-
+def search(localpath, handle, url):
+    if url:
+        show_search_list(localpath, handle, url)
+        return
+    q = get_keyboard(heading='Введите название сериала')
+    q = q.encode('utf-8')
+    if q:
+        title = urllib.quote_plus(q)
+        searchUrl = 'http://seasonvar.ru/autocomplete.php?query=' + title
+        if show_search_list(localpath, handle, searchUrl) > 0:
+            with open(__last__, 'a') as f:
+                f.write(q+"\n")
+    # else:
+    #     xbmc.log("action!")
+    #     # xbmc.executebuiltin('Action(ParentDir)')
+    #     global __action__ 
+    #     __action__ = 'Action(Back)'
+        
 
 def show_search_list(localpath, handle, searchUrl):
     data = SeasonvarWebOpener().get_html(searchUrl)
+    # xbmc.log(data)
     data = json.loads(data)
-    if (data["query"]):
+    serials = []
+    if 'query' in data and 'id' in data and 'suggestions' in data:
         total = len(data["suggestions"])
-        serials = []
         for x in range(0, total):
             serials.append(Serial(
                 "http://seasonvar.ru/" + data["data"][x],
-                data["id"][x],
+                data["id"][x] if len(data["id"]) > x else "",
                 data["suggestions"][x].encode('utf8')))
         for serial in serials:
             add_dir(serial.get_url(), serial.get_name(), serial.get_thumb(), 1)
+    return len(serials)
 
 
 def main():
+    if not os.path.exists(__profile__):
+        os.makedirs(__profile__)
+
     params = get_params()
     url = None
     name = None
     mode = None
+    global __action__ 
 
     try:
         url = urllib.unquote_plus(params["url"])
@@ -142,14 +175,36 @@ def main():
 
     localpath = sys.argv[0]
     handle = int(sys.argv[1])
+    
+    # xbmc.log("localpath: "+localpath+" url:"+str(url)+" name:"+str(name)+" mode:"+str(mode))
 
     grabber = SeasonvarGrabber()
 
+    if mode == 4:
+        os.remove(__last__)
+        __action__ = "Container.Refresh"
+        
+    # if handle > 0:
+    #     xbmcplugin.setContent(handle, 'movies')
+        
     # first page
     if mode is None:
-        li = xbmcgui.ListItem("search")
+        li = xbmcgui.ListItem("Поиск")
         u = localpath + "?mode=3"
         xbmcplugin.addDirectoryItem(handle, u, li, True)
+        if os.path.isfile(__last__):
+            with open(__last__) as f:
+                q = f.readlines()
+                for s in q:
+                    if s != "":
+                        li = xbmcgui.ListItem(s)
+                        title = urllib.quote_plus(s)
+                        searchUrl = 'http://seasonvar.ru/autocomplete.php?query=' + title
+                        u = localpath + "?mode=3&url="+urllib.quote_plus(searchUrl)
+                        xbmcplugin.addDirectoryItem(handle, u, li, True)
+                if len(q) > 0:
+                    li = xbmcgui.ListItem("Очистить историю поиска")
+                    xbmcplugin.addDirectoryItem(handle, localpath+"?mode=4", li, False)
         # for serial in grabber.get_main_page_data():
         #     add_dir(serial.get_url(), serial.get_name(), serial.get_thumb(), 1)
 
@@ -157,14 +212,16 @@ def main():
     elif mode is 1:
         index(url, name)
 
-    # page with links
     elif mode is 2:
-        play(url, name)
+        play(handle, url, name)
 
-    # page with links
     elif mode == 3:
-        search(sys.argv[0], int(sys.argv[1]))
+        search(localpath, handle, url)
 
-    xbmcplugin.endOfDirectory(int(sys.argv[1]))
-
+    if handle != -1:
+        xbmcplugin.endOfDirectory(handle)
+    
+    if __action__ != '-':
+        # xbmc.log("action: "+__action__)
+        xbmc.executebuiltin(__action__)        
 main()
