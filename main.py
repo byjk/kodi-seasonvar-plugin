@@ -184,9 +184,7 @@ def main():
         os.remove(__last__)
         __action__ = "Container.Refresh"
         
-    # if handle > 0:
-    #     xbmcplugin.setContent(handle, 'movies')
-        
+       
     # first page
     if mode is None:
         li = xbmcgui.ListItem("Поиск")
